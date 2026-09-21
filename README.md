@@ -11,7 +11,7 @@ Responsável exclusivamente pelas regras de negócio de estações. Sensores, le
 
 ## Stack
 
-Node.js 22 · TypeScript · Fastify 5 · Zod 4 · PostgreSQL (`pg`) · Vitest · ESLint + Prettier
+Node.js 24 · TypeScript · Fastify 5 · Zod 4 · PostgreSQL (`pg`) · Vitest · ESLint + Prettier
 
 ## Como rodar
 
@@ -125,7 +125,7 @@ Seguem o _Guia Prático de Testes Unitários_ do time: nomenclatura `should_X_wh
 npm run test:coverage
 ```
 
-O gate de cobertura é 80% (linhas, funções, branches e statements). `src/index.ts`, `src/config/**` e o repositório Postgres ficam fora do cálculo — este último é validado por testes de integração com banco real.
+O gate de cobertura é 80% (linhas, funções, branches e statements). `src/index.ts`, `src/config/**` e o repositório Postgres ficam fora do cálculo de cobertura. O repositório Postgres é coberto pelos testes de integração (`*.integration.test.ts`), que rodam contra um Postgres real quando `TEST_DATABASE_URL` está definida — no CI, sempre.
 
 ## Observação sobre o contrato
 

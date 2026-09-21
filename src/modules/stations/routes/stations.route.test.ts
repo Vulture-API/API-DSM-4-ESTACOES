@@ -72,6 +72,19 @@ describe("station routes", () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it("should_return_validation_error_when_mac_address_mixes_separators", async () => {
+    const response = await createStation({ mac_address: "AA:BB-CC:DD-EE:FF" });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it("should_accept_mac_address_with_hyphens_only", async () => {
+    const response = await createStation({ mac_address: "AA-BB-CC-DD-EE-10" });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json().mac_address).toBe("AA:BB:CC:DD:EE:10");
+  });
+
   it("should_return_validation_error_when_latitude_is_out_of_range", async () => {
     const response = await createStation({ latitude: 120 });
 

@@ -2,8 +2,11 @@ import z from "zod";
 
 import { paginationQuerySchema } from "@/shared/schemas/pagination.schema.js";
 
-// MAC no formato AA:BB:CC:DD:EE:FF ou AA-BB-CC-DD-EE-FF.
-const MAC_ADDRESS_REGEX = /^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$/;
+// MAC no formato AA:BB:CC:DD:EE:FF ou AA-BB-CC-DD-EE-FF. O separador é
+// capturado no primeiro par e reusado (\1) nos demais: formas misturadas como
+// AA:BB-CC:DD-EE:FF são rejeitadas, em vez de normalizadas e gravadas.
+const MAC_ADDRESS_REGEX =
+  /^[0-9A-Fa-f]{2}([:-])(?:[0-9A-Fa-f]{2}\1){4}[0-9A-Fa-f]{2}$/;
 
 export const stationBodySchema = z.object({
   property_id: z.coerce.number().int().positive(),
