@@ -1,0 +1,769 @@
+{
+  "info": {
+    "name": "AgroClima 360 - Estações (SCRUM-359 / SCRUM-360)",
+    "description": "CRUD de estações meteorológicas.\n\nANTES DE RODAR:\n1. Suba o serviço: npm run dev (porta 3001)\n2. Aplique o schema: npm run db:setup em API-DSM-4-BANCO\n3. Selecione o environment 'AgroClima - Local'\n4. Confira que propertyId aponta para uma propriedade existente\n\nRode com o Collection Runner para executar tudo em ordem. As requisições encadeiam: a criação guarda o id, o resto usa esse id, e o DELETE limpa no fim.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// O banco de development é compartilhado e o MAC é único, então cada",
+          "// execução usa um prefixo próprio para não colidir com outro dev.",
+          "// Regenera no Healthcheck (primeira requisição): sem isso o prefixo ficava",
+          "// salvo entre execuções e, se uma rodada falhasse antes da limpeza, a próxima",
+          "// batia 409 no MAC que sobrou no banco.",
+          "if (pm.info.requestName === 'Healthcheck' || !pm.collectionVariables.get('macPrefixo')) {",
+          "  const hex = Date.now().toString(16).slice(-6).toUpperCase().padStart(6, '0');",
+          "  const prefixo = 'A1:' + hex.slice(0, 2) + ':' + hex.slice(2, 4) + ':' + hex.slice(4, 6) + ':00';",
+          "  pm.collectionVariables.set('macPrefixo', prefixo);",
+          "  pm.collectionVariables.set('sufixo', hex);",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "sufixo",
+      "value": ""
+    },
+    {
+      "key": "macPrefixo",
+      "value": ""
+    },
+    {
+      "key": "macMinusculo",
+      "value": ""
+    },
+    {
+      "key": "stationId",
+      "value": ""
+    },
+    {
+      "key": "stationId2",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Saúde",
+      "item": [
+        {
+          "name": "Healthcheck",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"responde {status: 'ok'}\", () => {",
+                  "  pm.expect(pm.response.json()).to.eql({ status: 'ok' });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Usado pelo pipeline de CD para saber se o serviço subiu."
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Criação",
+      "item": [
+        {
+          "name": "Criar estação (201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 409 && pm.response.json().code === 'PROPERTY_NOT_FOUND') {",
+                  "  console.error('A propriedade ' + pm.environment.get('propertyId') + ' não existe.');",
+                  "  console.error('Rode npm run db:setup em API-DSM-4-BANCO e ajuste a variável propertyId.');",
+                  "}",
+                  "",
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "",
+                  "const corpo = pm.response.json();",
+                  "pm.collectionVariables.set('stationId', corpo.id);",
+                  "",
+                  "pm.test('id é número', () => pm.expect(corpo.id).to.be.a('number'));",
+                  "pm.test('latitude é número, não string', () => pm.expect(corpo.latitude).to.be.a('number'));",
+                  "pm.test('longitude é número, não string', () => pm.expect(corpo.longitude).to.be.a('number'));",
+                  "pm.test('last_communication_at começa nulo', () => pm.expect(corpo.last_communication_at).to.be.null);",
+                  "pm.test('created_at preenchido', () => pm.expect(corpo.created_at).to.be.a('string'));",
+                  "pm.test('devolve o nome enviado', () => {",
+                  "  pm.expect(corpo.name).to.eql('Smoke ' + pm.collectionVariables.get('sufixo') + ' Norte');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"property_id\": \"{{propertyId}}\",\n  \"mac_address\": \"{{macPrefixo}}:01\",\n  \"name\": \"Smoke {{sufixo}} Norte\",\n  \"latitude\": -23.5,\n  \"longitude\": -46.6\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/stations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations"]
+            },
+            "description": "Caminho feliz. Guarda o id para as requisições seguintes."
+          }
+        },
+        {
+          "name": "Criar com MAC minúsculo e hífen (201, normaliza)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Mesmo endereço, escrito como o usuário costuma digitar.",
+                  "const mac = pm.collectionVariables.get('macPrefixo') + ':02';",
+                  "pm.collectionVariables.set('macMinusculo', mac.toLowerCase().replace(/:/g, '-'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "",
+                  "const corpo = pm.response.json();",
+                  "pm.collectionVariables.set('stationId2', corpo.id);",
+                  "",
+                  "pm.test('MAC volta maiúsculo com dois-pontos', () => {",
+                  "  pm.expect(corpo.mac_address).to.eql(pm.collectionVariables.get('macPrefixo') + ':02');",
+                  "});",
+                  "pm.test('coordenadas omitidas viram nulo', () => {",
+                  "  pm.expect(corpo.latitude).to.be.null;",
+                  "  pm.expect(corpo.longitude).to.be.null;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"property_id\": \"{{propertyId}}\",\n  \"mac_address\": \"{{macMinusculo}}\",\n  \"name\": \"Smoke {{sufixo}} Sul\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/stations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations"]
+            },
+            "description": "O MAC é gravado em maiúsculas com dois-pontos. Sem isso, 'aa:bb:...' e 'AA:BB:...' passariam pela restrição de unicidade como endereços diferentes."
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Validação (400)",
+      "item": [
+        {
+          "name": "MAC inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('código VALIDATION_ERROR', () => {",
+                  "  pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"property_id\": \"{{propertyId}}\",\n  \"mac_address\": \"nao-e-um-mac\",\n  \"name\": \"Smoke {{sufixo}} Invalido\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/stations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations"]
+            }
+          }
+        },
+        {
+          "name": "Latitude fora de -90..90",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"property_id\": \"{{propertyId}}\",\n  \"mac_address\": \"{{macPrefixo}}:03\",\n  \"name\": \"Smoke {{sufixo}} Lat\",\n  \"latitude\": 120\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/stations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations"]
+            }
+          }
+        },
+        {
+          "name": "Nome com menos de 3 caracteres",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"property_id\": \"{{propertyId}}\",\n  \"mac_address\": \"{{macPrefixo}}:04\",\n  \"name\": \"AB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/stations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations"]
+            }
+          }
+        },
+        {
+          "name": "Corpo sem os campos obrigatórios",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Só o nome\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/stations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations"]
+            }
+          }
+        },
+        {
+          "name": "Id não numérico na URL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/stations/abc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations", "abc"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Conflitos (409)",
+      "item": [
+        {
+          "name": "MAC duplicado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('código DUPLICATE_MAC_ADDRESS', () => {",
+                  "  pm.expect(pm.response.json().code).to.eql('DUPLICATE_MAC_ADDRESS');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"property_id\": \"{{propertyId}}\",\n  \"mac_address\": \"{{macPrefixo}}:01\",\n  \"name\": \"Smoke {{sufixo}} Duplicada\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/stations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations"]
+            },
+            "description": "Mesmo MAC da primeira estação criada."
+          }
+        },
+        {
+          "name": "Propriedade inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('código PROPERTY_NOT_FOUND', () => {",
+                  "  pm.expect(pm.response.json().code).to.eql('PROPERTY_NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"property_id\": 999999,\n  \"mac_address\": \"{{macPrefixo}}:05\",\n  \"name\": \"Smoke {{sufixo}} SemProp\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/stations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations"]
+            },
+            "description": "A existência da propriedade é checada antes do INSERT, para devolver um 409 com código de negócio em vez de um 500 vindo da FK."
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Leitura",
+      "item": [
+        {
+          "name": "Listar paginado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const corpo = pm.response.json();",
+                  "pm.test('tem data e meta', () => {",
+                  "  pm.expect(corpo.data).to.be.an('array');",
+                  "  pm.expect(corpo.meta).to.be.an('object');",
+                  "});",
+                  "pm.test('meta segue o contrato', () => {",
+                  "  pm.expect(corpo.meta).to.have.all.keys('total_records', 'total_pages', 'current_page');",
+                  "});",
+                  "pm.test('limit é respeitado', () => pm.expect(corpo.data.length).to.be.at.most(5));",
+                  "pm.test('current_page reflete a query', () => pm.expect(corpo.meta.current_page).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/stations?page=1&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filtrar por property_id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('só traz estações daquela propriedade', () => {",
+                  "  const esperado = Number(pm.environment.get('propertyId'));",
+                  "  pm.response.json().data.forEach((e) => pm.expect(e.property_id).to.eql(esperado));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/stations?property_id={{propertyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations"],
+              "query": [
+                {
+                  "key": "property_id",
+                  "value": "{{propertyId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Buscar por id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('devolve a estação certa', () => {",
+                  "  pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get('stationId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/stations/{{stationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations", "{{stationId}}"]
+            }
+          }
+        },
+        {
+          "name": "Buscar id inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('código STATION_NOT_FOUND', () => {",
+                  "  pm.expect(pm.response.json().code).to.eql('STATION_NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/stations/999999",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations", "999999"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Atualização",
+      "item": [
+        {
+          "name": "Atualizar estação (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const corpo = pm.response.json();",
+                  "pm.test('o nome mudou', () => {",
+                  "  pm.expect(corpo.name).to.eql('Smoke ' + pm.collectionVariables.get('sufixo') + ' Renomeada');",
+                  "});",
+                  "pm.test('as coordenadas mudaram', () => {",
+                  "  pm.expect(corpo.latitude).to.eql(-22.9);",
+                  "  pm.expect(corpo.longitude).to.eql(-43.2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"property_id\": \"{{propertyId}}\",\n  \"mac_address\": \"{{macPrefixo}}:01\",\n  \"name\": \"Smoke {{sufixo}} Renomeada\",\n  \"latitude\": -22.9,\n  \"longitude\": -43.2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/stations/{{stationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations", "{{stationId}}"]
+            },
+            "description": "Manter o próprio MAC não pode ser tratado como duplicidade."
+          }
+        },
+        {
+          "name": "Atualizar id inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"property_id\": \"{{propertyId}}\",\n  \"mac_address\": \"{{macPrefixo}}:99\",\n  \"name\": \"Smoke {{sufixo}} Fantasma\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/stations/999999",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations", "999999"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Exclusão e limpeza",
+      "item": [
+        {
+          "name": "Excluir estação (204)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 204', () => pm.response.to.have.status(204));",
+                  "pm.test('corpo vazio', () => pm.expect(pm.response.text()).to.be.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/stations/{{stationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations", "{{stationId}}"]
+            }
+          }
+        },
+        {
+          "name": "Excluir a segunda estação (204)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/stations/{{stationId2}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations", "{{stationId2}}"]
+            }
+          }
+        },
+        {
+          "name": "Excluir de novo (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/stations/{{stationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations", "{{stationId}}"]
+            },
+            "description": "Confirma que a exclusão foi efetiva e que não sobrou dado de teste no banco."
+          }
+        }
+      ]
+    }
+  ]
+}
