@@ -23,9 +23,6 @@ export default defineConfig({
         "src/config/**",
         "src/**/*.test.ts",
         "src/**/types/**",
-        // Repositório Postgres é exercitado por testes de integração com banco real,
-        // fora do escopo dos testes unitários (I/O).
-        "**/pg-*.repository.ts",
       ],
       thresholds: {
         lines: 80,
