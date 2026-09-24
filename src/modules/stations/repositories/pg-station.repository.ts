@@ -152,4 +152,16 @@ export class PgStationRepository implements StationRepository {
 
     return (result.rowCount ?? 0) > 0;
   }
+
+  async listProperties(): Promise<
+    Array<{ id: number; name: string; location: string | null }>
+  > {
+    const result = await this.database.query<{
+      id: number;
+      name: string;
+      location: string | null;
+    }>("SELECT id, name, location FROM properties ORDER BY name ASC");
+
+    return result.rows;
+  }
 }

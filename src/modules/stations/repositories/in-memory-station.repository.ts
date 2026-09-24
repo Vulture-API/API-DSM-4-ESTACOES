@@ -84,4 +84,14 @@ export class InMemoryStationRepository implements StationRepository {
   async propertyExists(propertyId: number): Promise<boolean> {
     return this.propertyIds.has(propertyId);
   }
+
+  async listProperties(): Promise<
+    Array<{ id: number; name: string; location: string | null }>
+  > {
+    return [
+      { id: 1, name: "Fazenda Santa Clara", location: "Piracicaba - SP" },
+      { id: 2, name: "Sítio Boa Vista", location: "Jacareí - SP" },
+      { id: 3, name: "Fazenda Santa Rita", location: "São José dos Campos - SP" },
+    ];
+  }
 }

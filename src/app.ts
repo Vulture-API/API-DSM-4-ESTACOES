@@ -32,6 +32,9 @@ export function buildApp(options: BuildAppOptions = {}) {
 
   app.register(cookie);
   app.get("/health", async () => ({ status: "ok" }));
+  app.get("/api/properties", async () => {
+    return (await stationRepository.listProperties?.()) ?? [];
+  });
   app.register(buildStationRoutes(stationRepository), {
     prefix: "/api/stations",
   });
