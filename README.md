@@ -44,14 +44,15 @@ O schema é criado pelos scripts em `API-DSM-4-BANCO/setup/` — não há migrat
 
 Prefixo: `/api/stations`
 
-| Método   | Rota                | Descrição                                       | Respostas                  |
-| -------- | ------------------- | ----------------------------------------------- | -------------------------- |
-| `POST`   | `/api/stations`     | Cria estação                                    | `201`, `400`, `409`        |
-| `GET`    | `/api/stations`     | Lista paginada (`page`, `limit`, `property_id`) | `200`, `400`               |
-| `GET`    | `/api/stations/:id` | Busca por ID                                    | `200`, `404`               |
-| `PUT`    | `/api/stations/:id` | Atualiza estação                                | `200`, `400`, `404`, `409` |
-| `DELETE` | `/api/stations/:id` | Exclui estação                                  | `204`, `404`               |
-| `GET`    | `/health`           | Healthcheck (usado pelo CD)                     | `200`                      |
+| Método   | Rota                       | Descrição                                       | Respostas                  |
+| -------- | -------------------------- | ----------------------------------------------- | -------------------------- |
+| `POST`   | `/api/stations`            | Cria estação                                    | `201`, `400`, `409`        |
+| `GET`    | `/api/stations`            | Lista paginada (`page`, `limit`, `property_id`) | `200`, `400`               |
+| `GET`    | `/api/stations/:id`        | Busca por ID                                    | `200`, `404`               |
+| `GET`    | `/api/stations/:id/status` | Consulta o status de comunicação                | `200`, `400`, `404`        |
+| `PUT`    | `/api/stations/:id`        | Atualiza estação                                | `200`, `400`, `404`, `409` |
+| `DELETE` | `/api/stations/:id`        | Exclui estação                                  | `204`, `404`               |
+| `GET`    | `/health`                  | Healthcheck (usado pelo CD)                     | `200`                      |
 
 ### Corpo de criação/atualização
 
@@ -79,6 +80,26 @@ Validações aplicadas:
 {
   "data": [{ "id": 1, "...": "..." }],
   "meta": { "total_records": 25, "total_pages": 2, "current_page": 1 }
+}
+```
+
+### Status de comunicação
+
+`GET /api/stations/:id/status` compara o instante atual com
+`last_communication_at`. A estação permanece `Online` até o limite configurado,
+inclusive, e passa a `Offline` quando o intervalo é maior. Uma estação que nunca
+se comunicou (`last_communication_at: null`) também fica `Offline`.
+
+O limite é definido por `STATION_OFFLINE_THRESHOLD_MINUTES` e usa `10` minutos
+por padrão.
+
+```json
+{
+  "station_id": 1,
+  "status": "Online",
+  "last_communication_at": "2026-09-23T22:40:00.000Z",
+  "checked_at": "2026-09-23T22:49:00.000Z",
+  "offline_threshold_minutes": 10
 }
 ```
 

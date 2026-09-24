@@ -573,6 +573,38 @@
           }
         },
         {
+          "name": "Consultar status de comunicação",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('estação sem comunicação está Offline', () => {",
+                  "  const corpo = pm.response.json();",
+                  "  pm.expect(corpo.station_id).to.eql(Number(pm.collectionVariables.get('stationId')));",
+                  "  pm.expect(corpo.status).to.eql('Offline');",
+                  "  pm.expect(corpo.last_communication_at).to.be.null;",
+                  "  pm.expect(corpo.checked_at).to.be.a('string');",
+                  "  pm.expect(corpo.offline_threshold_minutes).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/stations/{{stationId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stations", "{{stationId}}", "status"]
+            },
+            "description": "Online até o limite configurado em STATION_OFFLINE_THRESHOLD_MINUTES, inclusive. Offline após o limite ou quando last_communication_at é nulo."
+          }
+        },
+        {
           "name": "Buscar id inexistente (404)",
           "event": [
             {
