@@ -9,6 +9,7 @@ import {
 } from "fastify-type-provider-zod";
 
 import { database } from "@/config/database.js";
+import { env } from "@/config/environment.js";
 import { handleError } from "@/errors/error-handler.js";
 import { PgStationRepository } from "@/modules/stations/repositories/pg-station.repository.js";
 import type { StationRepository } from "@/modules/stations/repositories/station.repository.js";
@@ -16,6 +17,8 @@ import { buildStationRoutes } from "@/modules/stations/routes/stations.route.js"
 
 type BuildAppOptions = {
   stationRepository?: StationRepository;
+  stationOfflineThresholdMinutes?: number;
+  clock?: () => Date;
 };
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -32,9 +35,17 @@ export function buildApp(options: BuildAppOptions = {}) {
 
   app.register(cookie);
   app.get("/health", async () => ({ status: "ok" }));
-  app.register(buildStationRoutes(stationRepository), {
-    prefix: "/api/stations",
-  });
+  app.register(
+    buildStationRoutes(
+      stationRepository,
+      options.stationOfflineThresholdMinutes ??
+        env.STATION_OFFLINE_THRESHOLD_MINUTES,
+      options.clock,
+    ),
+    {
+      prefix: "/api/stations",
+    },
+  );
 
   return app;
 }

@@ -5,6 +5,8 @@ import { buildApp } from "@/app.js";
 import { InMemoryStationRepository } from "@/modules/stations/repositories/in-memory-station.repository.js";
 
 describe("station routes", () => {
+  const now = new Date("2026-09-23T22:50:00.000Z");
+
   let app: FastifyInstance;
   let repository: InMemoryStationRepository;
 
@@ -18,7 +20,11 @@ describe("station routes", () => {
 
   beforeEach(async () => {
     repository = new InMemoryStationRepository();
-    app = buildApp({ stationRepository: repository });
+    app = buildApp({
+      stationRepository: repository,
+      stationOfflineThresholdMinutes: 10,
+      clock: () => now,
+    });
     await app.ready();
   });
 
@@ -147,6 +153,64 @@ describe("station routes", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().id).toBe(1);
+  });
+
+  it("should_return_detailed_online_station_status", async () => {
+    await createStation();
+    repository.stations[0]!.last_communication_at = new Date(
+      "2026-09-23T22:41:00.000Z",
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/stations/1/status",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      station_id: 1,
+      status: "Online",
+      last_communication_at: "2026-09-23T22:41:00.000Z",
+      checked_at: "2026-09-23T22:50:00.000Z",
+      offline_threshold_minutes: 10,
+    });
+  });
+
+  it("should_return_offline_station_status_when_it_never_communicated", async () => {
+    await createStation();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/stations/1/status",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      station_id: 1,
+      status: "Offline",
+      last_communication_at: null,
+      offline_threshold_minutes: 10,
+    });
+  });
+
+  it("should_return_not_found_when_getting_status_for_unknown_station", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/stations/999/status",
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json().code).toBe("STATION_NOT_FOUND");
+  });
+
+  it("should_return_validation_error_when_status_id_is_not_numeric", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/stations/abc/status",
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().code).toBe("VALIDATION_ERROR");
   });
 
   it("should_return_not_found_when_station_does_not_exist", async () => {
