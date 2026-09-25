@@ -14,7 +14,9 @@ async function seed() {
     await client.query("BEGIN");
 
     // 1. Garantir usuário proprietário
-    const userRes = await client.query("SELECT id FROM users ORDER BY id ASC LIMIT 1");
+    const userRes = await client.query(
+      "SELECT id FROM users ORDER BY id ASC LIMIT 1",
+    );
     const ownerUserId = userRes.rows[0]?.id ?? 1;
 
     // 2. Popular propriedades
@@ -32,14 +34,14 @@ async function seed() {
     for (const prop of propertiesData) {
       const existing = await client.query(
         "SELECT id FROM properties WHERE name = $1",
-        [prop.name]
+        [prop.name],
       );
       if (existing.rows.length > 0) {
         propertyIds[prop.name] = existing.rows[0].id;
       } else {
         const inserted = await client.query(
           "INSERT INTO properties (name, location, owner_user_id, created_at) VALUES ($1, $2, $3, NOW()) RETURNING id",
-          [prop.name, prop.location, ownerUserId]
+          [prop.name, prop.location, ownerUserId],
         );
         propertyIds[prop.name] = inserted.rows[0].id;
       }
@@ -60,14 +62,14 @@ async function seed() {
     for (const st of sensorTypesData) {
       const existing = await client.query(
         "SELECT id FROM sensor_types WHERE name = $1",
-        [st.name]
+        [st.name],
       );
       if (existing.rows.length > 0) {
         sensorTypeIds[st.name] = existing.rows[0].id;
       } else {
         const inserted = await client.query(
           "INSERT INTO sensor_types (name, unit_of_measure, factor, gain) VALUES ($1, $2, $3, $4) RETURNING id",
-          [st.name, st.unit, st.factor, st.gain]
+          [st.name, st.unit, st.factor, st.gain],
         );
         sensorTypeIds[st.name] = inserted.rows[0].id;
       }
@@ -88,7 +90,7 @@ async function seed() {
         propriedade: "Fazenda Santa Rita",
         mac_address: "00:1A:2B:3C:4D:02",
         latitude: -23.1755,
-        longitude: -45.8790,
+        longitude: -45.879,
         minutesAgo: 4,
       },
       {
@@ -96,7 +98,7 @@ async function seed() {
         propriedade: "Fazenda Santa Rita",
         mac_address: "00:1A:2B:3C:4D:03",
         latitude: -23.1702,
-        longitude: -45.8760,
+        longitude: -45.876,
         minutesAgo: 1,
       },
       {
@@ -111,7 +113,7 @@ async function seed() {
         name: "Estação 05",
         propriedade: "Fazenda Boa Vista",
         mac_address: "00:1A:2B:3C:4D:05",
-        latitude: -23.1810,
+        latitude: -23.181,
         longitude: -45.8845,
         minutesAgo: 40,
       },
@@ -120,7 +122,7 @@ async function seed() {
         propriedade: "Fazenda Esperança",
         mac_address: "00:1A:2B:3C:4D:06",
         latitude: -23.1745,
-        longitude: -45.8930,
+        longitude: -45.893,
         minutesAgo: 3,
       },
       {
@@ -144,15 +146,15 @@ async function seed() {
         propriedade: "Sítio Boa Vista",
         mac_address: "00:1A:2B:3C:4D:09",
         latitude: -23.1955,
-        longitude: -45.8770,
+        longitude: -45.877,
         minutesAgo: 6,
       },
       {
         name: "Estação 10",
         propriedade: "Fazenda Água Limpa",
         mac_address: "00:1A:2B:3C:4D:10",
-        latitude: -23.1680,
-        longitude: -45.8850,
+        latitude: -23.168,
+        longitude: -45.885,
         minutesAgo: 7,
       },
       {
@@ -167,8 +169,8 @@ async function seed() {
         name: "Estação 12",
         propriedade: "Fazenda Santa Clara",
         mac_address: "00:1A:2B:3C:4D:12",
-        latitude: -23.1840,
-        longitude: -45.8820,
+        latitude: -23.184,
+        longitude: -45.882,
         minutesAgo: 120,
       },
     ];
@@ -179,7 +181,7 @@ async function seed() {
 
       const existing = await client.query(
         "SELECT id FROM stations WHERE mac_address = $1",
-        [st.mac_address]
+        [st.mac_address],
       );
 
       let stationId: number;
@@ -187,24 +189,40 @@ async function seed() {
         stationId = existing.rows[0].id;
         await client.query(
           `UPDATE stations SET property_id = $1, name = $2, latitude = $3, longitude = $4, last_communication_at = ${lastComm} WHERE id = $5`,
-          [propId, st.name, st.latitude, st.longitude, stationId]
+          [propId, st.name, st.latitude, st.longitude, stationId],
         );
       } else {
         const inserted = await client.query(
           `INSERT INTO stations (property_id, mac_address, name, latitude, longitude, last_communication_at, created_at)
            VALUES ($1, $2, $3, $4, $5, ${lastComm}, NOW() - INTERVAL '30 days')
            RETURNING id`,
-          [propId, st.mac_address, st.name, st.latitude, st.longitude]
+          [propId, st.mac_address, st.name, st.latitude, st.longitude],
         );
         stationId = inserted.rows[0].id;
       }
 
       // Sensores para a estação
       const sensorsConfig = [
-        { localId: `HUM-${stationId.toString().padStart(2, "0")}`, type: "Umidade", value: 32 + (stationId % 10) },
-        { localId: `TEMP-${stationId.toString().padStart(2, "0")}`, type: "Temperatura", value: 22.5 + (stationId % 5) },
-        { localId: `WIND-${stationId.toString().padStart(2, "0")}`, type: "Velocidade do Vento", value: 12.0 + (stationId % 8) },
-        { localId: `PRESS-${stationId.toString().padStart(2, "0")}`, type: "Pressão", value: 1013.25 + (stationId % 4) },
+        {
+          localId: `HUM-${stationId.toString().padStart(2, "0")}`,
+          type: "Umidade",
+          value: 32 + (stationId % 10),
+        },
+        {
+          localId: `TEMP-${stationId.toString().padStart(2, "0")}`,
+          type: "Temperatura",
+          value: 22.5 + (stationId % 5),
+        },
+        {
+          localId: `WIND-${stationId.toString().padStart(2, "0")}`,
+          type: "Velocidade do Vento",
+          value: 12.0 + (stationId % 8),
+        },
+        {
+          localId: `PRESS-${stationId.toString().padStart(2, "0")}`,
+          type: "Pressão",
+          value: 1013.25 + (stationId % 4),
+        },
       ];
 
       for (const s of sensorsConfig) {
@@ -213,7 +231,7 @@ async function seed() {
 
         const existingSensor = await client.query(
           "SELECT id FROM sensors WHERE station_id = $1 AND sensor_type_id = $2",
-          [stationId, typeId]
+          [stationId, typeId],
         );
 
         let sensorId: number;
@@ -222,7 +240,7 @@ async function seed() {
         } else {
           const insertedSensor = await client.query(
             "INSERT INTO sensors (station_id, sensor_type_id, local_identifier, operational_status, created_at) VALUES ($1, $2, $3, true, NOW()) RETURNING id",
-            [stationId, typeId, s.localId]
+            [stationId, typeId, s.localId],
           );
           sensorId = insertedSensor.rows[0].id;
         }
@@ -230,19 +248,21 @@ async function seed() {
         // Leitura recente
         const existingReading = await client.query(
           "SELECT id FROM readings WHERE sensor_id = $1 LIMIT 1",
-          [sensorId]
+          [sensorId],
         );
         if (existingReading.rows.length === 0) {
           await client.query(
             "INSERT INTO readings (sensor_id, value, unix_time, data_consistent, created_at) VALUES ($1, $2, $3, true, NOW())",
-            [sensorId, s.value, Math.floor(Date.now() / 1000)]
+            [sensorId, s.value, Math.floor(Date.now() / 1000)],
           );
         }
       }
     }
 
     await client.query("COMMIT");
-    console.log("Banco de dados populado com sucesso com 12 estações, propriedades, sensores e leituras!");
+    console.log(
+      "Banco de dados populado com sucesso com 12 estações, propriedades, sensores e leituras!",
+    );
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("Erro ao popular o banco:", error);

@@ -91,7 +91,11 @@ export class InMemoryStationRepository implements StationRepository {
     return [
       { id: 1, name: "Fazenda Santa Clara", location: "Piracicaba - SP" },
       { id: 2, name: "Sítio Boa Vista", location: "Jacareí - SP" },
-      { id: 3, name: "Fazenda Santa Rita", location: "São José dos Campos - SP" },
+      {
+        id: 3,
+        name: "Fazenda Santa Rita",
+        location: "São José dos Campos - SP",
+      },
     ];
   }
 }
