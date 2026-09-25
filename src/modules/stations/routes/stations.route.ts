@@ -41,6 +41,11 @@ export function buildStationRoutes(
       controller.list,
     );
 
+    app.get("/properties", async (_request, reply) => {
+      const properties = (await stationRepository.listProperties?.()) ?? [];
+      return reply.status(200).send(properties);
+    });
+
     app.get(
       "/:id/status",
       { schema: { params: stationIdParamSchema } },
