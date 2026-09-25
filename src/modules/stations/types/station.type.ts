@@ -29,3 +29,13 @@ export type PaginatedStations = {
   data: Station[];
   total_records: number;
 };
+
+export type StationCommunicationStatus = "Online" | "Offline";
+
+export type StationStatus = {
+  station_id: number;
+  status: StationCommunicationStatus;
+  last_communication_at: Date | null;
+  checked_at: Date;
+  offline_threshold_minutes: number;
+};

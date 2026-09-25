@@ -10,17 +10,25 @@ import {
 import { CreateStationService } from "@/modules/stations/services/create-station.service.js";
 import { DeleteStationService } from "@/modules/stations/services/delete-station.service.js";
 import { GetStationService } from "@/modules/stations/services/get-station.service.js";
+import { GetStationStatusService } from "@/modules/stations/services/get-station-status.service.js";
 import { ListStationsService } from "@/modules/stations/services/list-stations.service.js";
 import { UpdateStationService } from "@/modules/stations/services/update-station.service.js";
 
 export function buildStationRoutes(
   stationRepository: StationRepository,
+  offlineThresholdMinutes: number,
+  clock?: () => Date,
 ): FastifyPluginAsyncZod {
   return async (app) => {
     const controller = new StationController(
       new CreateStationService(stationRepository),
       new ListStationsService(stationRepository),
       new GetStationService(stationRepository),
+      new GetStationStatusService(
+        stationRepository,
+        offlineThresholdMinutes,
+        clock,
+      ),
       new UpdateStationService(stationRepository),
       new DeleteStationService(stationRepository),
     );
@@ -37,6 +45,12 @@ export function buildStationRoutes(
       const properties = (await stationRepository.listProperties?.()) ?? [];
       return reply.status(200).send(properties);
     });
+
+    app.get(
+      "/:id/status",
+      { schema: { params: stationIdParamSchema } },
+      controller.getStatus,
+    );
 
     app.get(
       "/:id",
