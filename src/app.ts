@@ -11,12 +11,16 @@ import {
 import { database } from "@/config/database.js";
 import { env } from "@/config/environment.js";
 import { handleError } from "@/errors/error-handler.js";
+import type { MonitoringRepository } from "@/modules/monitoring/repositories/monitoring.repository.js";
+import { PgMonitoringRepository } from "@/modules/monitoring/repositories/pg-monitoring.repository.js";
+import { buildMonitoringRoutes } from "@/modules/monitoring/routes/monitoring.route.js";
 import { PgStationRepository } from "@/modules/stations/repositories/pg-station.repository.js";
 import type { StationRepository } from "@/modules/stations/repositories/station.repository.js";
 import { buildStationRoutes } from "@/modules/stations/routes/stations.route.js";
 
 type BuildAppOptions = {
   stationRepository?: StationRepository;
+  monitoringRepository?: MonitoringRepository;
   stationOfflineThresholdMinutes?: number;
   clock?: () => Date;
 };
@@ -32,6 +36,11 @@ export function buildApp(options: BuildAppOptions = {}) {
 
   const stationRepository =
     options.stationRepository ?? new PgStationRepository(database);
+  const monitoringRepository =
+    options.monitoringRepository ?? new PgMonitoringRepository(database);
+  const offlineThresholdMinutes =
+    options.stationOfflineThresholdMinutes ??
+    env.STATION_OFFLINE_THRESHOLD_MINUTES;
 
   app.register(cookie);
   app.get("/health", async () => ({ status: "ok" }));
@@ -41,13 +50,18 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(
     buildStationRoutes(
       stationRepository,
-      options.stationOfflineThresholdMinutes ??
-        env.STATION_OFFLINE_THRESHOLD_MINUTES,
+      offlineThresholdMinutes,
       options.clock,
     ),
-    {
-      prefix: "/api/stations",
-    },
+    { prefix: "/api/stations" },
+  );
+  app.register(
+    buildMonitoringRoutes(
+      monitoringRepository,
+      offlineThresholdMinutes,
+      options.clock,
+    ),
+    { prefix: "/api/stations" },
   );
 
   return app;
