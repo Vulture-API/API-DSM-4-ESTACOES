@@ -1,12 +1,35 @@
 import { fileURLToPath } from "node:url";
+
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    exclude: ["**/node_modules/**", "**/dist/**", "_to_delete/**"],
     env: {
       NODE_ENV: "test",
-      PORT: "3000",
-      DATABASE_URL: "postgresql://user:password@localhost:5432/database",
+      PORT: "3001",
+      DATABASE_URL:
+        // Os testes usam repositórios fake e não abrem conexão.
+        // Este valor existe só para satisfazer a validação de env.
+        "postgresql://user:password@localhost:5432/test",
+    },
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "lcov", "json-summary"],
+      reportsDirectory: "./coverage",
+      include: ["src/**/*.ts"],
+      exclude: [
+        "src/index.ts",
+        "src/config/**",
+        "src/**/*.test.ts",
+        "src/**/types/**",
+      ],
+      thresholds: {
+        lines: 80,
+        functions: 80,
+        branches: 80,
+        statements: 80,
+      },
     },
   },
   resolve: {

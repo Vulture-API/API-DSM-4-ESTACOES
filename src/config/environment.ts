@@ -1,5 +1,6 @@
 import "dotenv/config";
 import "@/config/zod.config.js";
+
 import z from "zod";
 
 const environmentSchema = z.object({
@@ -8,6 +9,11 @@ const environmentSchema = z.object({
     .default("development"),
   PORT: z.coerce.number().int().positive(),
   DATABASE_URL: z.string(),
+  STATION_OFFLINE_THRESHOLD_MINUTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(10),
 });
 
 const result = environmentSchema.safeParse(process.env);
